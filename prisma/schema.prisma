@@ -1,0 +1,300 @@
+// Prisma Schema for AI-Powered CV Builder SaaS
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Plan {
+  FREE
+  PRO
+}
+
+enum ImportStatus {
+  PENDING
+  PARSED
+  FAILED
+}
+
+enum AIOperation {
+  PARSE
+  BULLET_IMPROVE
+  SUMMARY_GEN
+  GAP_ANALYSIS
+}
+
+model User {
+  id            String         @id @default(cuid())
+  name          String?
+  email         String         @unique
+  emailVerified DateTime?
+  passwordHash  String?
+  image         String?
+  role          Role           @default(USER)
+  plan          Plan           @default(FREE)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  resumes       Resume[]
+  aiUsages      AIUsage[]
+  imports       ResumeImport[]
+  subscription  Subscription?
+
+  @@index([email])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Resume {
+  id           String         @id @default(cuid())
+  userId       String
+  title        String         @default("Untitled Resume")
+  slug         String?
+  templateId   String         @default("modern") // "modern" | "classic" | "minimal"
+  themeColor   String         @default("#2563eb")
+  fontFamily   String         @default("Inter")
+  fontSize     String         @default("base")   // "sm" | "base" | "lg"
+  pageMargin   String         @default("normal") // "compact" | "normal" | "spacious"
+  sectionOrder Json?                             // Order of sections e.g. ["summary", "experience", "education", ...]
+  version      Int            @default(1)
+  isPublished  Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  personalInfo PersonalInfo?
+  experiences  Experience[]
+  educations   Education[]
+  projects     Project[]
+  skills       SkillGroup[]
+  certs        Certification[]
+  languages    Language[]
+  customs      CustomSection[]
+
+  @@index([userId])
+  @@index([slug])
+}
+
+model PersonalInfo {
+  id          String   @id @default(cuid())
+  resumeId    String   @unique
+  fullName    String?
+  headline    String?
+  email       String?
+  phone       String?
+  location    String?
+  website     String?
+  linkedin    String?
+  github      String?
+  summary     String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  resume      Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+}
+
+model Experience {
+  id          String    @id @default(cuid())
+  resumeId    String
+  company     String
+  position    String
+  location    String?
+  startDate   String?
+  endDate     String?
+  isCurrent   Boolean   @default(false)
+  description String?   @db.Text
+  order       Int       @default(0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  resume      Resume    @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId])
+}
+
+model Education {
+  id           String    @id @default(cuid())
+  resumeId     String
+  institution  String
+  degree       String
+  fieldOfStudy String?
+  startDate    String?
+  endDate      String?
+  score        String?
+  location     String?
+  order        Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  resume       Resume    @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId])
+}
+
+model Project {
+  id           String    @id @default(cuid())
+  resumeId     String
+  title        String
+  subtitle     String?
+  url          String?
+  githubUrl    String?
+  startDate    String?
+  endDate      String?
+  description  String?   @db.Text
+  technologies String[]  @default([])
+  order        Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  resume       Resume    @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId])
+}
+
+model SkillGroup {
+  id        String   @id @default(cuid())
+  resumeId  String
+  category  String   @default("Technical Skills")
+  skills    String[] @default([])
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId])
+}
+
+model Certification {
+  id         String    @id @default(cuid())
+  resumeId   String
+  name       String
+  issuer     String
+  issueDate  String?
+  expiryDate String?
+  url        String?
+  order      Int       @default(0)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  resume     Resume    @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId])
+}
+
+model Language {
+  id          String   @id @default(cuid())
+  resumeId    String
+  name        String
+  proficiency String?  // e.g. "Native", "Fluent", "Conversational"
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  resume      Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId])
+}
+
+model CustomSection {
+  id        String   @id @default(cuid())
+  resumeId  String
+  title     String
+  content   String   @db.Text
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  resume    Resume   @relation(fields: [resumeId], references: [id], onDelete: Cascade)
+
+  @@index([resumeId])
+}
+
+model ResumeImport {
+  id               String       @id @default(cuid())
+  userId           String
+  fileName         String
+  fileType         String
+  extractedTextRaw String?      @db.Text
+  status           ImportStatus @default(PENDING)
+  error            String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  user             User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AIUsage {
+  id          String      @id @default(cuid())
+  userId      String
+  operation   AIOperation
+  tokensUsed  Int         @default(0)
+  createdAt   DateTime    @default(now())
+
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Subscription {
+  id               String    @id @default(cuid())
+  userId           String    @unique
+  plan             Plan      @default(FREE)
+  status           String    @default("ACTIVE")
+  stripeCustomerId String?
+  stripeSubId      String?
+  currentPeriodEnd DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
